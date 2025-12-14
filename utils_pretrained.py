@@ -47,17 +47,39 @@ def predict_pretrained(raw_df: pd.DataFrame) -> pd.DataFrame:
     X = prepare_input(raw_df)
 
     preds = model.predict(X)
+
+    # Decide which label means "churn" using model.classes_ when available
+    pos_label = None
+    if hasattr(model, "classes_") and len(getattr(model, "classes_", [])) == 2:
+        classes = list(model.classes_)
+        # Prefer common "positive" labels if present; otherwise use the 2nd class
+        for candidate in [1, "Yes", "YES", True, "True", "Churn", "churn"]:
+            if candidate in classes:
+                pos_label = candidate
+                break
+        if pos_label is None:
+            pos_label = classes[1]  # fallback
+
+    # Probability of the positive class (if supported)
     prob = None
-    if hasattr(model, "predict_proba"):
-        prob = model.predict_proba(X)[:, 1]
+    if hasattr(model, "predict_proba") and pos_label is not None and hasattr(model, "classes_"):
+        classes = list(model.classes_)
+        pos_index = classes.index(pos_label)
+        prob = model.predict_proba(X)[:, pos_index]
 
     out = raw_df.copy()
-    out["Churn_Prediction"] = pd.Series(preds).map({1: "Yes", 0: "No"}).fillna("No")
+
+    # Force Yes/No output no matter what preds look like
+    if pos_label is not None:
+        out["Churn_Prediction"] = np.where(pd.Series(preds) == pos_label, "Yes", "No")
+    else:
+        # If we cannot infer pos_label, fall back to safe string conversion
+        out["Churn_Prediction"] = pd.Series(preds).astype(str)
 
     if prob is not None:
         out["Churn_Probability"] = prob
 
-    # Force prediction columns to the end
+    # Move prediction columns to the end
     for col in ["Churn_Prediction", "Churn_Probability"]:
         if col in out.columns:
             tmp = out.pop(col)
