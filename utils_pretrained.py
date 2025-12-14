@@ -2,7 +2,7 @@ import json
 import pandas as pd
 import joblib
 
-MODEL_PATH = "pretrained_model.pkl"
+MODEL_PATH = "viraj_model.pkl"
 SCHEMA_PATH = "feature_schema.json"
 
 model = joblib.load(MODEL_PATH)
